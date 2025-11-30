@@ -16,6 +16,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { username, email, password } = registerSchema.parse(body)
 
+    // Check database connection
+    try {
+      await prisma.$connect()
+    } catch (dbError) {
+      console.error('Database connection error:', dbError)
+      return NextResponse.json({ error: 'Database connection failed', details: dbError instanceof Error ? dbError.message : 'Unknown error' }, { status: 500 })
+    }
+
     const existingUser = await prisma.user.findFirst({
       where: { OR: [{ email }, { username }] },
     })
@@ -46,6 +54,20 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: 'User registered successfully. Please check your email for verification.' })
   } catch (error) {
-    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+    console.error('Registration error:', error)
+    if (error instanceof ZodError) {
+      return NextResponse.json({
+        error: 'Validation failed',
+        details: error.issues.map(err => ({
+          field: err.path.join('.'),
+          message: err.message
+        }))
+      }, { status: 400 })
+    }
+    return NextResponse.json({
+      error: 'Invalid input',
+      details: error instanceof Error ? error.message : 'Unknown error',
+      type: error instanceof Error ? error.constructor.name : 'Unknown'
+    }, { status: 400 })
   }
 }
