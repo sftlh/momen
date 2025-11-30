@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Family Finance Management System
+
+A Next.js application for managing family finances, built with TypeScript, Tailwind CSS, and Prisma.
+
+## Features
+
+- User registration and login with email verification
+- Dashboard displaying financial overview (income, expenses, savings, assets)
+- Add income, expenses, savings, and assets
+- Set spending limits with warnings
+- Monthly and yearly financial summaries
+- Remaining money calculation
 
 ## Getting Started
 
-First, run the development server:
+1. Set up your database:
+   - Update `DATABASE_URL` in `.env` with your PostgreSQL connection string.
+   - Run `npx prisma migrate dev` to apply database schema.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+2. Configure email settings:
+   - Update email environment variables in `.env` for Nodemailer.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000) to access the application.
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+- `DATABASE_URL`: PostgreSQL connection string
+- `JWT_SECRET`: Secret key for JWT tokens
+- `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM`: Email configuration for Nodemailer
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Database Schema
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The application uses Prisma with the following models:
+- User
+- Income
+- Expense
+- Savings
+- Asset
+- SpendingLimit
 
-## Deploy on Vercel
+## API Routes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `/api/auth/register`: User registration
+- `/api/auth/login`: User login
+- `/api/user/finances`: Get user's financial data
+- `/api/user/summary`: Get monthly/yearly summaries
+- `/api/income`: Add income
+- `/api/expense`: Add expense
+- `/api/saving`: Add saving
+- `/api/asset`: Add asset
+- `/api/spending-limit`: Set spending limit

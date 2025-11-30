@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  username           String   @unique
+  email              String   @unique
+  password           String
+  emailVerified      Boolean  @default(false)
+  verificationToken  String?  @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  incomes       Income[]
+  expenses      Expense[]
+  savings       Savings[]
+  assets        Asset[]
+  spendingLimit SpendingLimit?
+
+  @@map("users")
+}
+
+model Income {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  description String?
+  date        DateTime
+  category    String?
+  isRecurring Boolean  @default(false)
+  frequency   String?
+  endDate     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("incomes")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  description String?
+  date        DateTime
+  category    String?
+  isRecurring Boolean  @default(false)
+  frequency   String?
+  endDate     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("expenses")
+}
+
+model Savings {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  description String?
+  date        DateTime
+  isRecurring Boolean  @default(false)
+  frequency   String?
+  endDate     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("savings")
+}
+
+model Asset {
+  id              String            @id @default(cuid())
+  userId          String
+  type            String            // stocks, bonds, gold, real-estate, crypto
+  symbol          String?           // stock ticker, crypto symbol
+  quantity        Float?            // number of shares/units owned
+  purchasePrice   Float             // original purchase price per unit
+  currentPrice    Float?            // current market price per unit
+  totalValue      Float             // quantity * currentPrice (or purchasePrice if no currentPrice)
+  description     String?
+  date            DateTime          @default(now())
+  lastUpdated     DateTime          @default(now())
+
+  // Relations
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  priceHistory    AssetPriceHistory[]
+
+  @@map("assets")
+}
+
+model AssetPriceHistory {
+  id        String   @id @default(cuid())
+  assetId   String
+  price     Float    // price per unit at this point in time
+  date      DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("asset_price_history")
+}
+
+model SpendingLimit {
+  id         String  @id @default(cuid())
+  userId     String  @unique
+  limitAmount Float
+  period     String  // monthly, yearly
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("spending_limits")
+}
