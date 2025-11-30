@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/auth'
 import { sendEmail } from '@/lib/email'
-import { z } from 'zod'
+import { getBaseUrl } from '@/lib/urls'
+import { z, ZodError } from 'zod'
 
 const registerSchema = z.object({
   username: z.string().min(3),
@@ -31,7 +32,8 @@ export async function POST(request: NextRequest) {
 
     // Send verification email
     try {
-      const verificationLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/verify?token=${verificationToken}`
+      const baseUrl = getBaseUrl()
+      const verificationLink = `${baseUrl}/verify?token=${verificationToken}`
       await sendEmail(
         email,
         'Verify Your Email - MoMen',
