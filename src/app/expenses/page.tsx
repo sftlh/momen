@@ -109,6 +109,57 @@ export default function ExpensesPage() {
     return categories.sort()
   }
 
+  const handleDeleteExpense = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this expense record? This action cannot be undone.')) {
+      return
+    }
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/expense?id=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.ok) {
+        // Refresh the data
+        const fetchExpenses = async () => {
+          const token = localStorage.getItem('token')
+          if (!token) return
+
+          const params = new URLSearchParams()
+          if (selectedYear) params.append('year', selectedYear)
+          if (selectedMonth) params.append('month', selectedMonth)
+
+          const url = `/api/user/expenses${params.toString() ? `?${params.toString()}` : ''}`
+
+          try {
+            const res = await fetch(url, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            const data = await res.json()
+            setExpenses(data.expenses || [])
+          } catch (error) {
+            console.error('Failed to fetch expenses:', error)
+          }
+        }
+        fetchExpenses()
+        alert('Expense record deleted successfully')
+      } else {
+        const error = await res.json()
+        alert(`Failed to delete expense: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Delete expense error:', error)
+      alert('Failed to delete expense record')
+    }
+  }
+
   const totalAmount = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)
 
   return (
@@ -205,12 +256,13 @@ export default function ExpensesPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Category</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Amount</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Recurring</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-600">
                   {filteredExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-4 text-center text-gray-400">
+                      <td colSpan={6} className="px-6 py-4 text-center text-gray-400">
                         No expenses found for the selected filters
                       </td>
                     </tr>
@@ -233,6 +285,15 @@ export default function ExpensesPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                           {expense.recurring ? '🔄 Yes' : '❌ No'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <button
+                            onClick={() => handleDeleteExpense(expense.id)}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20 px-3 py-1 rounded-md transition-colors duration-200"
+                            title="Delete this expense record"
+                          >
+                            🗑️ Delete
+                          </button>
                         </td>
                       </tr>
                     ))

@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import TransferFromSavings from '@/components/TransferFromSavings'
 
 interface Savings {
   id: string
@@ -12,6 +13,9 @@ interface Savings {
   category: string
   date: string
   recurring: boolean
+  type: string
+  goalAmount?: number
+  isEmergency: boolean
 }
 
 export default function SavingsPage() {
@@ -109,7 +113,55 @@ export default function SavingsPage() {
     return categories.sort()
   }
 
+  const handleDeleteSaving = async (savingId: string, savingDescription: string) => {
+    if (!confirm(`Are you sure you want to delete the saving "${savingDescription}"? This action cannot be undone.`)) {
+      return
+    }
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/user/savings/${savingId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.ok) {
+        alert('Saving deleted successfully!')
+        // Refresh the savings list
+        const params = new URLSearchParams()
+        if (selectedYear) params.append('year', selectedYear)
+        if (selectedMonth) params.append('month', selectedMonth)
+
+        const url = `/api/user/savings${params.toString() ? `?${params.toString()}` : ''}`
+
+        const refreshRes = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await refreshRes.json()
+        setSavings(data.savings || [])
+      } else {
+        const error = await res.json()
+        alert(`Failed to delete saving: ${error.message || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Failed to delete saving:', error)
+      alert('Failed to delete saving. Please try again.')
+    }
+  }
+
   const totalAmount = filteredSavings.reduce((sum, saving) => sum + saving.amount, 0)
+  const emergencySavings = filteredSavings
+    .filter(saving => saving.isEmergency)
+    .reduce((sum, saving) => sum + saving.amount, 0)
+  const regularSavings = totalAmount - emergencySavings
+  const withdrawals = filteredSavings
+    .filter(saving => saving.type === 'withdrawal')
+    .reduce((sum, saving) => sum + Math.abs(saving.amount), 0)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white flex flex-col">
@@ -117,8 +169,37 @@ export default function SavingsPage() {
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-4xl font-bold mb-8 bg-gradient-to-r from-blue-400 to-cyan-600 bg-clip-text text-transparent text-center">
-            💾 Savings History
+            💾 Savings Management
           </h1>
+
+          {/* Transfer from Savings */}
+          <TransferFromSavings
+            onTransfer={() => {
+              // Re-fetch savings data
+              const fetchSavings = async () => {
+                const token = localStorage.getItem('token')
+                if (!token) return
+
+                const params = new URLSearchParams()
+                if (selectedYear) params.append('year', selectedYear)
+                if (selectedMonth) params.append('month', selectedMonth)
+
+                const url = `/api/user/savings${params.toString() ? `?${params.toString()}` : ''}`
+
+                try {
+                  const res = await fetch(url, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  })
+                  const data = await res.json()
+                  setSavings(data.savings || [])
+                } catch (error) {
+                  console.error('Failed to fetch savings:', error)
+                }
+              }
+              fetchSavings()
+            }}
+            availableSavings={totalAmount}
+          />
 
           {/* Filters */}
           <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-600">
@@ -186,11 +267,23 @@ export default function SavingsPage() {
             </div>
           </div>
 
-          {/* Summary */}
-          <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-600">
-            <div className="text-center">
-              <p className="text-blue-400 text-2xl font-bold">{formatNumber(totalAmount)}</p>
-              <p className="text-gray-400 text-sm">Total Savings ({filteredSavings.length} transactions)</p>
+          {/* Enhanced Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div className="bg-gray-800 rounded-lg p-6 border border-gray-600 text-center">
+              <p className="text-green-400 text-2xl font-bold">{formatNumber(totalAmount)}</p>
+              <p className="text-gray-400 text-sm">Total Savings</p>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-6 border border-gray-600 text-center">
+              <p className="text-blue-400 text-2xl font-bold">{formatNumber(emergencySavings)}</p>
+              <p className="text-gray-400 text-sm">Emergency Fund</p>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-6 border border-gray-600 text-center">
+              <p className="text-purple-400 text-2xl font-bold">{formatNumber(regularSavings)}</p>
+              <p className="text-gray-400 text-sm">Regular Savings</p>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-6 border border-gray-600 text-center">
+              <p className="text-red-400 text-2xl font-bold">{formatNumber(withdrawals)}</p>
+              <p className="text-gray-400 text-sm">Used from Savings</p>
             </div>
           </div>
 
@@ -202,15 +295,17 @@ export default function SavingsPage() {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Description</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Category</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Recurring</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Emergency</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-600">
                   {filteredSavings.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-4 text-center text-gray-400">
+                      <td colSpan={7} className="px-6 py-4 text-center text-gray-400">
                         No savings found for the selected filters
                       </td>
                     </tr>
@@ -220,19 +315,40 @@ export default function SavingsPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                           {formatDate(saving.date)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                        <td className="px-6 py-4 text-sm text-white">
                           {saving.description}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            saving.type === 'deposit' ? 'bg-green-900 text-green-200' :
+                            saving.type === 'withdrawal' ? 'bg-red-900 text-red-200' :
+                            'bg-blue-900 text-blue-200'
+                          }`}>
+                            {saving.type === 'deposit' ? '💰 Deposit' :
+                             saving.type === 'withdrawal' ? '📤 Withdrawal' :
+                             '🔄 Transfer'}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                           <span className="px-2 py-1 text-xs rounded-full bg-blue-900 text-blue-200">
                             {saving.category}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-400 font-semibold">
-                          {formatNumber(saving.amount)}
+                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                          saving.amount >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {saving.amount >= 0 ? '+' : ''}{formatNumber(saving.amount)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                          {saving.recurring ? '🔄 Yes' : '❌ No'}
+                          {saving.isEmergency ? '🚨 Yes' : '❌ No'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <button
+                            onClick={() => handleDeleteSaving(saving.id, saving.description)}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors duration-200"
+                          >
+                            🗑️ Delete
+                          </button>
                         </td>
                       </tr>
                     ))

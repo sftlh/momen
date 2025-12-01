@@ -35,6 +35,45 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: 'Income added' })
   } catch (error) {
-    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+    console.error('Create income error:', error)
+    return NextResponse.json({ error: 'Failed to create income' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const decoded = verifyToken(token) as { userId: string } | null
+  if (!decoded) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'Income ID is required' }, { status: 400 })
+    }
+
+    // Verify the income belongs to the user
+    const income = await prisma.income.findFirst({
+      where: {
+        id: id,
+        userId: decoded.userId
+      }
+    })
+
+    if (!income) {
+      return NextResponse.json({ error: 'Income not found or access denied' }, { status: 404 })
+    }
+
+    await prisma.income.delete({
+      where: { id: id }
+    })
+
+    return NextResponse.json({ message: 'Income deleted successfully' })
+  } catch (error) {
+    console.error('Delete income error:', error)
+    return NextResponse.json({ error: 'Failed to delete income' }, { status: 500 })
   }
 }

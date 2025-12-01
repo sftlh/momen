@@ -35,6 +35,45 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: 'Expense added' })
   } catch (error) {
-    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+    console.error('Create expense error:', error)
+    return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const decoded = verifyToken(token) as { userId: string } | null
+  if (!decoded) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 })
+    }
+
+    // Verify the expense belongs to the user
+    const expense = await prisma.expense.findFirst({
+      where: {
+        id: id,
+        userId: decoded.userId
+      }
+    })
+
+    if (!expense) {
+      return NextResponse.json({ error: 'Expense not found or access denied' }, { status: 404 })
+    }
+
+    await prisma.expense.delete({
+      where: { id: id }
+    })
+
+    return NextResponse.json({ message: 'Expense deleted successfully' })
+  } catch (error) {
+    console.error('Delete expense error:', error)
+    return NextResponse.json({ error: 'Failed to delete expense' }, { status: 500 })
   }
 }

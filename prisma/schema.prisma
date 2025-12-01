@@ -70,9 +70,13 @@ model Savings {
   amount      Float
   description String?
   date        DateTime
+  category    String?  // emergency, vacation, car, house, etc.
+  type        String?   @default("deposit") // deposit, withdrawal, transfer
   isRecurring Boolean  @default(false)
   frequency   String?
   endDate     DateTime?
+  goalAmount  Float?   // Target amount for goal-based savings
+  isEmergency Boolean?  @default(false) // Mark as emergency fund
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

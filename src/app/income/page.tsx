@@ -53,6 +53,31 @@ export default function IncomePage() {
     }
   }, [selectedYear, selectedMonth, router])
 
+  const refreshIncomes = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    const params = new URLSearchParams()
+    if (selectedYear) params.append('year', selectedYear)
+    if (selectedMonth) params.append('month', selectedMonth)
+
+    const url = `/api/user/incomes${params.toString() ? `?${params.toString()}` : ''}`
+
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      setIncomes(data.incomes || [])
+    } catch (error) {
+      console.error('Failed to fetch incomes:', error)
+      router.push('/login')
+    }
+  }
+
   // Filter incomes by category
   const filteredIncomes = useMemo(() => {
     if (selectedCategory) {
@@ -61,6 +86,8 @@ export default function IncomePage() {
       return incomes
     }
   }, [incomes, selectedCategory])
+
+  const totalAmount = filteredIncomes.reduce((sum, income) => sum + income.amount, 0)
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -109,7 +136,36 @@ export default function IncomePage() {
     return categories.sort()
   }
 
-  const totalAmount = filteredIncomes.reduce((sum, income) => sum + income.amount, 0)
+  const handleDeleteIncome = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this income record? This action cannot be undone.')) {
+      return
+    }
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/income?id=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.ok) {
+        // Refresh the data
+        refreshIncomes()
+        alert('Income record deleted successfully')
+      } else {
+        const error = await res.json()
+        alert(`Failed to delete income: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Delete income error:', error)
+      alert('Failed to delete income record')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white flex flex-col">
@@ -205,12 +261,13 @@ export default function IncomePage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Category</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Amount</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Recurring</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-600">
                   {filteredIncomes.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-4 text-center text-gray-400">
+                      <td colSpan={6} className="px-6 py-4 text-center text-gray-400">
                         No income found for the selected filters
                       </td>
                     </tr>
@@ -233,6 +290,15 @@ export default function IncomePage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                           {income.recurring ? '🔄 Yes' : '❌ No'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <button
+                            onClick={() => handleDeleteIncome(income.id)}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20 px-3 py-1 rounded-md transition-colors duration-200"
+                            title="Delete this income record"
+                          >
+                            🗑️ Delete
+                          </button>
                         </td>
                       </tr>
                     ))

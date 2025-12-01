@@ -102,3 +102,47 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update asset price' }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const decoded = verifyToken(token) as { userId: string } | null
+  if (!decoded) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'Asset ID is required' }, { status: 400 })
+    }
+
+    // Verify the asset belongs to the user
+    const asset = await prisma.asset.findFirst({
+      where: {
+        id: id,
+        userId: decoded.userId
+      }
+    })
+
+    if (!asset) {
+      return NextResponse.json({ error: 'Asset not found or access denied' }, { status: 404 })
+    }
+
+    // Delete associated price history first
+    await prisma.assetPriceHistory.deleteMany({
+      where: { assetId: id }
+    })
+
+    // Then delete the asset
+    await prisma.asset.delete({
+      where: { id: id }
+    })
+
+    return NextResponse.json({ message: 'Asset deleted successfully' })
+  } catch (error) {
+    console.error('Delete asset error:', error)
+    return NextResponse.json({ error: 'Failed to delete asset' }, { status: 500 })
+  }
+}

@@ -111,6 +111,47 @@ export default function AssetsPage() {
     return types.sort()
   }
 
+  const handleDeleteAsset = async (assetId: string, assetName: string) => {
+    if (!confirm(`Are you sure you want to delete the asset "${assetName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/user/assets/${assetId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.ok) {
+        alert('Asset deleted successfully!')
+        // Refresh the assets list
+        const params = new URLSearchParams()
+        if (selectedYear) params.append('year', selectedYear)
+        if (selectedMonth) params.append('month', selectedMonth)
+
+        const url = `/api/user/assets${params.toString() ? `?${params.toString()}` : ''}`
+
+        const refreshRes = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await refreshRes.json()
+        setAssets(data.assets || [])
+      } else {
+        const error = await res.json()
+        alert(`Failed to delete asset: ${error.message || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Failed to delete asset:', error)
+      alert('Failed to delete asset. Please try again.')
+    }
+  }
+
   const totalValue = filteredAssets.reduce((sum, asset) => sum + asset.totalValue, 0)
   const totalPurchaseValue = filteredAssets.reduce((sum, asset) => sum + (asset.purchasePrice * asset.quantity), 0)
   const totalGainLoss = totalValue - totalPurchaseValue
@@ -228,12 +269,13 @@ export default function AssetsPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Current Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Total Value</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Gain/Loss</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-600">
                   {filteredAssets.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-4 text-center text-gray-400">
+                      <td colSpan={9} className="px-6 py-4 text-center text-gray-400">
                         No assets found for the selected filters
                       </td>
                     </tr>
@@ -277,6 +319,14 @@ export default function AssetsPage() {
                                 ({gainLossPercent.toFixed(1)}%)
                               </span>
                             </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <button
+                              onClick={() => handleDeleteAsset(asset.id, asset.name)}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors duration-200"
+                            >
+                              🗑️ Delete
+                            </button>
                           </td>
                         </tr>
                       )
