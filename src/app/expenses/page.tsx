@@ -162,6 +162,17 @@ export default function ExpensesPage() {
 
   const totalAmount = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)
 
+  // Calculate expenses by category
+  const expensesByCategory = useMemo(() => {
+    const categoryTotals: { [key: string]: number } = {}
+    filteredExpenses.forEach(expense => {
+      categoryTotals[expense.category] = (categoryTotals[expense.category] || 0) + expense.amount
+    })
+    return Object.entries(categoryTotals)
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => b.amount - a.amount) // Sort by amount descending
+  }, [filteredExpenses])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white flex flex-col">
       <Navbar />
@@ -244,6 +255,39 @@ export default function ExpensesPage() {
               <p className="text-gray-400 text-sm">Total Expenses ({filteredExpenses.length} transactions)</p>
             </div>
           </div>
+
+          {/* Category Summary */}
+          {expensesByCategory.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-4 text-gray-300">📊 Expenses by Category</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {expensesByCategory.map(({ category, amount }) => {
+                  const percentage = totalAmount > 0 ? (amount / totalAmount) * 100 : 0
+                  return (
+                    <div key={category} className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-300 truncate" title={category}>
+                          {category}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {percentage.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="text-lg font-bold text-red-400">
+                        {formatNumber(amount)}
+                      </div>
+                      <div className="w-full bg-gray-700 rounded-full h-2 mt-2">
+                        <div
+                          className="bg-red-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(percentage, 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Expenses List */}
           <div className="bg-gray-800 rounded-lg border border-gray-600 overflow-hidden">
