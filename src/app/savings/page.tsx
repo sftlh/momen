@@ -252,17 +252,31 @@ export default function SavingsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-600 bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                >
-                  <option value="">All Categories</option>
-                  {getUniqueCategories().map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
+                <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                  <span className="mr-2">🏷️</span> Category
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="appearance-none rounded-lg relative block w-full px-4 py-3 pr-10 border-2 border-gray-500 bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 hover:border-gray-400 shadow-lg"
+                  >
+                    <option value="">📂 All Categories</option>
+                    {getUniqueCategories().map(category => (
+                      <option key={category} value={category}>🏷️ {category}</option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                {selectedCategory && (
+                  <p className="text-xs text-cyan-400 mt-1 flex items-center">
+                    <span className="mr-1">✓</span> Filtered by: {selectedCategory}
+                  </p>
+                )}
               </div>
             </div>
           </div>
