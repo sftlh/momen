@@ -19,9 +19,15 @@ export default function ExpensesPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
   const [selectedMonth, setSelectedMonth] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [editForm, setEditForm] = useState({
+    amount: '',
+    description: '',
+    category: '',
+    date: '',
+    recurring: false,
+  })
   const router = useRouter()
-
-  // Fetch expenses when filters change
   useEffect(() => {
     const fetchExpenses = async () => {
       const token = localStorage.getItem('token')
@@ -157,6 +163,78 @@ export default function ExpensesPage() {
     } catch (error) {
       console.error('Delete expense error:', error)
       alert('Failed to delete expense record')
+    }
+  }
+
+  const handleEditExpense = (expense: Expense) => {
+    setEditingExpense(expense)
+    setEditForm({
+      amount: expense.amount.toString(),
+      description: expense.description,
+      category: expense.category,
+      date: new Date(expense.date).toISOString().split('T')[0],
+      recurring: expense.recurring,
+    })
+  }
+
+  const handleUpdateExpense = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingExpense) return
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/expense?id=${editingExpense.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          amount: parseFloat(editForm.amount),
+          description: editForm.description,
+          category: editForm.category,
+          date: editForm.date,
+          isRecurring: editForm.recurring,
+        }),
+      })
+
+      if (res.ok) {
+        // Refresh the data
+        const fetchExpenses = async () => {
+          const token = localStorage.getItem('token')
+          if (!token) return
+
+          const params = new URLSearchParams()
+          if (selectedYear) params.append('year', selectedYear)
+          if (selectedMonth) params.append('month', selectedMonth)
+
+          const url = `/api/user/expenses${params.toString() ? `?${params.toString()}` : ''}`
+
+          try {
+            const res = await fetch(url, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            const data = await res.json()
+            setExpenses(data.expenses || [])
+          } catch (error) {
+            console.error('Failed to fetch expenses:', error)
+          }
+        }
+        fetchExpenses()
+        setEditingExpense(null)
+        alert('Expense updated successfully')
+      } else {
+        const error = await res.json()
+        alert(`Failed to update expense: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Update expense error:', error)
+      alert('Failed to update expense')
     }
   }
 
@@ -331,13 +409,22 @@ export default function ExpensesPage() {
                           {expense.recurring ? '🔄 Yes' : '❌ No'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <button
-                            onClick={() => handleDeleteExpense(expense.id)}
-                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20 px-3 py-1 rounded-md transition-colors duration-200"
-                            title="Delete this expense record"
-                          >
-                            🗑️ Delete
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleEditExpense(expense)}
+                              className="text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 px-3 py-1 rounded-md transition-colors duration-200"
+                              title="Edit this expense record"
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteExpense(expense.id)}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-900/20 px-3 py-1 rounded-md transition-colors duration-200"
+                              title="Delete this expense record"
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -355,6 +442,107 @@ export default function ExpensesPage() {
         </div>
       </main>
       <Footer />
+
+      {/* Edit Expense Modal */}
+      {editingExpense && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-600">
+            <h3 className="text-lg font-semibold text-white mb-4">✏️ Edit Expense</h3>
+            <form onSubmit={handleUpdateExpense} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={editForm.amount}
+                  onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                <input
+                  type="text"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                <div className="relative">
+                  <select
+                    value={editForm.category}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                    className="appearance-none w-full px-4 py-3 pr-10 border-2 border-gray-500 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-300 hover:border-gray-400 shadow-lg"
+                    required
+                  >
+                    <option value="" className="bg-gray-700 text-white">📂 Select category</option>
+                    <option value="food" className="bg-gray-700 text-white">🍕 Food & Dining</option>
+                    <option value="transport" className="bg-gray-700 text-white">🚗 Transportation</option>
+                    <option value="shopping" className="bg-gray-700 text-white">🛍️ Shopping</option>
+                    <option value="entertainment" className="bg-gray-700 text-white">🎬 Entertainment</option>
+                    <option value="bills" className="bg-gray-700 text-white">💡 Bills & Utilities</option>
+                    <option value="health" className="bg-gray-700 text-white">🏥 Health & Medical</option>
+                    <option value="education" className="bg-gray-700 text-white">📚 Education</option>
+                    <option value="other" className="bg-gray-700 text-white">📝 Other</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={editForm.date}
+                  onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="recurring"
+                  checked={editForm.recurring}
+                  onChange={(e) => setEditForm({ ...editForm, recurring: e.target.checked })}
+                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-600 rounded bg-gray-700"
+                />
+                <label htmlFor="recurring" className="ml-2 block text-sm text-gray-300">
+                  Recurring expense
+                </label>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                >
+                  Update Expense
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingExpense(null)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -103,6 +103,63 @@ export async function PUT(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const decoded = verifyToken(token) as { userId: string } | null
+  if (!decoded) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'Asset ID is required' }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const data = assetSchema.parse(body)
+
+    // Verify the asset belongs to the user
+    const existingAsset = await prisma.asset.findFirst({
+      where: {
+        id: id,
+        userId: decoded.userId
+      }
+    })
+
+    if (!existingAsset) {
+      return NextResponse.json({ error: 'Asset not found or access denied' }, { status: 404 })
+    }
+
+    // Calculate total value: quantity * currentPrice, or quantity * purchasePrice if no currentPrice
+    const totalValue = data.quantity
+      ? (data.currentPrice || data.purchasePrice) * data.quantity
+      : data.purchasePrice
+
+    await prisma.asset.update({
+      where: { id: id },
+      data: {
+        type: data.type,
+        symbol: data.symbol,
+        quantity: data.quantity,
+        purchasePrice: data.purchasePrice,
+        currentPrice: data.currentPrice,
+        totalValue: totalValue,
+        description: data.description,
+        date: data.date ? new Date(data.date) : undefined,
+        lastUpdated: new Date(),
+      },
+    })
+
+    return NextResponse.json({ message: 'Asset updated successfully' })
+  } catch (error) {
+    console.error('Update asset error:', error)
+    return NextResponse.json({ error: 'Failed to update asset' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

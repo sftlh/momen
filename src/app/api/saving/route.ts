@@ -42,6 +42,52 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const decoded = verifyToken(token) as { userId: string } | null
+  if (!decoded) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'Saving ID is required' }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const data = savingSchema.parse(body)
+
+    // Verify the saving belongs to the user
+    const existingSaving = await prisma.savings.findFirst({
+      where: {
+        id: id,
+        userId: decoded.userId
+      }
+    })
+
+    if (!existingSaving) {
+      return NextResponse.json({ error: 'Saving not found or access denied' }, { status: 404 })
+    }
+
+    await prisma.savings.update({
+      where: { id: id },
+      data: {
+        ...data,
+        date: new Date(data.date),
+        endDate: data.endDate ? new Date(data.endDate) : null,
+      },
+    })
+
+    return NextResponse.json({ message: 'Saving updated successfully' })
+  } catch (error) {
+    console.error('Update saving error:', error)
+    return NextResponse.json({ error: 'Failed to update saving' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

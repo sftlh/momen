@@ -23,9 +23,17 @@ export default function SavingsPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
   const [selectedMonth, setSelectedMonth] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingSaving, setEditingSaving] = useState<Savings | null>(null)
+  const [editForm, setEditForm] = useState({
+    amount: 0,
+    description: '',
+    category: '',
+    date: '',
+    type: 'deposit' as 'deposit' | 'withdrawal' | 'transfer',
+    isEmergency: false,
+  })
   const router = useRouter()
-
-  // Fetch savings when filters change
   useEffect(() => {
     const fetchSavings = async () => {
       const token = localStorage.getItem('token')
@@ -125,7 +133,7 @@ export default function SavingsPage() {
     }
 
     try {
-      const res = await fetch(`/api/user/savings/${savingId}`, {
+      const res = await fetch(`/api/saving?id=${savingId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -154,6 +162,95 @@ export default function SavingsPage() {
     }
   }
 
+  const handleEditSaving = (saving: Savings) => {
+    setEditingSaving(saving)
+    setEditForm({
+      amount: Math.abs(saving.amount),
+      description: saving.description,
+      category: saving.category,
+      date: new Date(saving.date).toISOString().split('T')[0],
+      type: saving.type as 'deposit' | 'withdrawal' | 'transfer',
+      isEmergency: saving.isEmergency,
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleUpdateSaving = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingSaving) return
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    const amount = editForm.type === 'withdrawal' ? -Math.abs(editForm.amount) : Math.abs(editForm.amount)
+
+    try {
+      const res = await fetch(`/api/saving?id=${editingSaving.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          amount: amount,
+          description: editForm.description,
+          category: editForm.category,
+          date: editForm.date,
+          type: editForm.type,
+          isEmergency: editForm.isEmergency,
+        }),
+      })
+
+      if (res.ok) {
+        // Refresh the savings list
+        const params = new URLSearchParams()
+        if (selectedYear) params.append('year', selectedYear)
+        if (selectedMonth) params.append('month', selectedMonth)
+
+        const url = `/api/user/savings${params.toString() ? `?${params.toString()}` : ''}`
+
+        const refreshRes = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await refreshRes.json()
+        setSavings(data.savings || [])
+        setEditingSaving(null)
+        setIsEditModalOpen(false)
+        alert('Saving updated successfully!')
+      } else {
+        const error = await res.json()
+        alert(`Failed to update saving: ${error.message || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Failed to update saving:', error)
+      alert('Failed to update saving. Please try again.')
+    }
+  }
+
+  const refreshSavings = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    const params = new URLSearchParams()
+    if (selectedYear) params.append('year', selectedYear)
+    if (selectedMonth) params.append('month', selectedMonth)
+
+    const url = `/api/user/savings${params.toString() ? `?${params.toString()}` : ''}`
+
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      setSavings(data.savings || [])
+    } catch (error) {
+      console.error('Failed to fetch savings:', error)
+    }
+  }
+
   const totalAmount = filteredSavings.reduce((sum, saving) => sum + saving.amount, 0)
   const emergencySavings = filteredSavings
     .filter(saving => saving.isEmergency)
@@ -175,28 +272,7 @@ export default function SavingsPage() {
           {/* Transfer from Savings */}
           <TransferFromSavings
             onTransfer={() => {
-              // Re-fetch savings data
-              const fetchSavings = async () => {
-                const token = localStorage.getItem('token')
-                if (!token) return
-
-                const params = new URLSearchParams()
-                if (selectedYear) params.append('year', selectedYear)
-                if (selectedMonth) params.append('month', selectedMonth)
-
-                const url = `/api/user/savings${params.toString() ? `?${params.toString()}` : ''}`
-
-                try {
-                  const res = await fetch(url, {
-                    headers: { Authorization: `Bearer ${token}` },
-                  })
-                  const data = await res.json()
-                  setSavings(data.savings || [])
-                } catch (error) {
-                  console.error('Failed to fetch savings:', error)
-                }
-              }
-              fetchSavings()
+              refreshSavings()
             }}
             availableSavings={totalAmount}
           />
@@ -357,12 +433,20 @@ export default function SavingsPage() {
                           {saving.isEmergency ? '🚨 Yes' : '❌ No'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <button
-                            onClick={() => handleDeleteSaving(saving.id, saving.description)}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors duration-200"
-                          >
-                            🗑️ Delete
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleEditSaving(saving)}
+                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors duration-200"
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSaving(saving.id, saving.description)}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors duration-200"
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -379,6 +463,131 @@ export default function SavingsPage() {
           </div>
         </div>
       </main>
+
+      {/* Edit Saving Modal */}
+      {isEditModalOpen && editingSaving && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 border border-gray-600">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+              <span className="mr-2">✏️</span> Edit Saving
+            </h3>
+            <form onSubmit={handleUpdateSaving}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">📅</span> Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.date}
+                    onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">📝</span> Description
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">💰</span> Type
+                  </label>
+                  <select
+                    value={editForm.type}
+                    onChange={(e) => setEditForm({ ...editForm, type: e.target.value as 'deposit' | 'withdrawal' | 'transfer' })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    required
+                  >
+                    <option value="deposit">💰 Deposit</option>
+                    <option value="withdrawal">📤 Withdrawal</option>
+                    <option value="transfer">🔄 Transfer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">🏷️</span> Category
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={editForm.category}
+                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                      className="appearance-none w-full px-4 py-3 pr-10 border-2 border-gray-500 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 hover:border-gray-400 shadow-lg"
+                      required
+                    >
+                      <option value="" className="bg-gray-700 text-white">📂 Select category</option>
+                      <option value="Emergency Fund" className="bg-gray-700 text-white">🚨 Emergency Fund</option>
+                      <option value="Vacation" className="bg-gray-700 text-white">🏖️ Vacation</option>
+                      <option value="Car Purchase" className="bg-gray-700 text-white">🚗 Car Purchase</option>
+                      <option value="Home Down Payment" className="bg-gray-700 text-white">🏠 Home Down Payment</option>
+                      <option value="Education" className="bg-gray-700 text-white">📚 Education</option>
+                      <option value="Retirement" className="bg-gray-700 text-white">🏖️ Retirement</option>
+                      <option value="Investment" className="bg-gray-700 text-white">📈 Investment</option>
+                      <option value="General" className="bg-gray-700 text-white">💰 General Savings</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">💵</span> Amount
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editForm.amount}
+                    onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center text-sm font-medium text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={editForm.isEmergency}
+                      onChange={(e) => setEditForm({ ...editForm, isEmergency: e.target.checked })}
+                      className="mr-2 h-4 w-4 text-cyan-600 focus:ring-cyan-500 border-gray-500 rounded"
+                    />
+                    <span className="mr-2">🚨</span> Emergency Fund
+                  </label>
+                </div>
+              </div>
+              <div className="flex space-x-3 mt-6">
+                <button
+                  type="submit"
+                  className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center"
+                >
+                  <span className="mr-2">💾</span> Update Saving
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false)
+                    setEditingSaving(null)
+                  }}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   )

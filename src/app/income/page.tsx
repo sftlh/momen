@@ -19,9 +19,15 @@ export default function IncomePage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
   const [selectedMonth, setSelectedMonth] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [editingIncome, setEditingIncome] = useState<Income | null>(null)
+  const [editForm, setEditForm] = useState({
+    amount: '',
+    description: '',
+    category: '',
+    date: '',
+    recurring: false,
+  })
   const router = useRouter()
-
-  // Fetch incomes when filters change
   useEffect(() => {
     const fetchIncomes = async () => {
       const token = localStorage.getItem('token')
@@ -167,6 +173,58 @@ export default function IncomePage() {
     }
   }
 
+  const handleEditIncome = (income: Income) => {
+    setEditingIncome(income)
+    setEditForm({
+      amount: income.amount.toString(),
+      description: income.description,
+      category: income.category,
+      date: new Date(income.date).toISOString().split('T')[0],
+      recurring: income.recurring,
+    })
+  }
+
+  const handleUpdateIncome = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingIncome) return
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/income?id=${editingIncome.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          amount: parseFloat(editForm.amount),
+          description: editForm.description,
+          category: editForm.category,
+          date: editForm.date,
+          isRecurring: editForm.recurring,
+        }),
+      })
+
+      if (res.ok) {
+        // Refresh the data
+        refreshIncomes()
+        setEditingIncome(null)
+        alert('Income updated successfully')
+      } else {
+        const error = await res.json()
+        alert(`Failed to update income: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Update income error:', error)
+      alert('Failed to update income')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white flex flex-col">
       <Navbar />
@@ -292,13 +350,22 @@ export default function IncomePage() {
                           {income.recurring ? '🔄 Yes' : '❌ No'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <button
-                            onClick={() => handleDeleteIncome(income.id)}
-                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20 px-3 py-1 rounded-md transition-colors duration-200"
-                            title="Delete this income record"
-                          >
-                            🗑️ Delete
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleEditIncome(income)}
+                              className="text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 px-3 py-1 rounded-md transition-colors duration-200"
+                              title="Edit this income record"
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteIncome(income.id)}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-900/20 px-3 py-1 rounded-md transition-colors duration-200"
+                              title="Delete this income record"
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -316,6 +383,105 @@ export default function IncomePage() {
         </div>
       </main>
       <Footer />
+
+      {/* Edit Income Modal */}
+      {editingIncome && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-600">
+            <h3 className="text-lg font-semibold text-white mb-4">✏️ Edit Income</h3>
+            <form onSubmit={handleUpdateIncome} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={editForm.amount}
+                  onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                <input
+                  type="text"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                <div className="relative">
+                  <select
+                    value={editForm.category}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                    className="appearance-none w-full px-4 py-3 pr-10 border-2 border-gray-500 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-300 hover:border-gray-400 shadow-lg"
+                    required
+                  >
+                    <option value="" className="bg-gray-700 text-white">📂 Select category</option>
+                    <option value="salary" className="bg-gray-700 text-white">💼 Salary</option>
+                    <option value="freelance" className="bg-gray-700 text-white">💻 Freelance</option>
+                    <option value="business" className="bg-gray-700 text-white">🏢 Business</option>
+                    <option value="investment" className="bg-gray-700 text-white">📈 Investment</option>
+                    <option value="gift" className="bg-gray-700 text-white">🎁 Gift</option>
+                    <option value="other" className="bg-gray-700 text-white">📝 Other</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={editForm.date}
+                  onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="recurring"
+                  checked={editForm.recurring}
+                  onChange={(e) => setEditForm({ ...editForm, recurring: e.target.checked })}
+                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-600 rounded bg-gray-700"
+                />
+                <label htmlFor="recurring" className="ml-2 block text-sm text-gray-300">
+                  Recurring income
+                </label>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                >
+                  Update Income
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingIncome(null)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

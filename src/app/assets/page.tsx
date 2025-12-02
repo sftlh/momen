@@ -7,7 +7,7 @@ import Footer from '@/components/Footer'
 
 interface Asset {
   id: string
-  name: string
+  symbol?: string
   type: string
   quantity: number
   purchasePrice: number
@@ -21,6 +21,16 @@ export default function AssetsPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
   const [selectedMonth, setSelectedMonth] = useState('')
   const [selectedType, setSelectedType] = useState('')
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    type: '',
+    quantity: 0,
+    purchasePrice: 0,
+    currentPrice: 0,
+    date: ''
+  })
   const router = useRouter()
 
   // Fetch assets when filters change
@@ -152,6 +162,72 @@ export default function AssetsPage() {
     }
   }
 
+  const handleEditAsset = (asset: Asset) => {
+    setEditingAsset(asset)
+    setEditForm({
+      name: asset.symbol || '',
+      type: asset.type,
+      quantity: asset.quantity,
+      purchasePrice: asset.purchasePrice,
+      currentPrice: asset.currentPrice,
+      date: asset.date.split('T')[0] // Format for date input
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleUpdateAsset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingAsset) return
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/user/assets/${editingAsset.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          type: editForm.type,
+          symbol: editForm.name || undefined,
+          quantity: editForm.quantity,
+          purchasePrice: editForm.purchasePrice,
+          currentPrice: editForm.currentPrice,
+          date: editForm.date,
+        }),
+      })
+
+      if (res.ok) {
+        alert('Asset updated successfully!')
+        setIsEditModalOpen(false)
+        setEditingAsset(null)
+        // Refresh the assets list
+        const params = new URLSearchParams()
+        if (selectedYear) params.append('year', selectedYear)
+        if (selectedMonth) params.append('month', selectedMonth)
+
+        const url = `/api/user/assets${params.toString() ? `?${params.toString()}` : ''}`
+
+        const refreshRes = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await refreshRes.json()
+        setAssets(data.assets || [])
+      } else {
+        const error = await res.json()
+        alert(`Failed to update asset: ${error.message || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Failed to update asset:', error)
+      alert('Failed to update asset. Please try again.')
+    }
+  }
+
   const totalValue = filteredAssets.reduce((sum, asset) => sum + asset.totalValue, 0)
   const totalPurchaseValue = filteredAssets.reduce((sum, asset) => sum + (asset.purchasePrice * asset.quantity), 0)
   const totalGainLoss = totalValue - totalPurchaseValue
@@ -262,7 +338,7 @@ export default function AssetsPage() {
                 <thead className="bg-gray-700">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Asset Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Symbol</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Quantity</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Purchase Price</th>
@@ -291,7 +367,7 @@ export default function AssetsPage() {
                             {formatDate(asset.date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-white font-semibold">
-                            {asset.name}
+                            {asset.symbol || 'N/A'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                             <span className="px-2 py-1 text-xs rounded-full bg-purple-900 text-purple-200">
@@ -321,12 +397,20 @@ export default function AssetsPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <button
-                              onClick={() => handleDeleteAsset(asset.id, asset.name)}
-                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors duration-200"
-                            >
-                              🗑️ Delete
-                            </button>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handleEditAsset(asset)}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors duration-200"
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAsset(asset.id, asset.symbol || 'this asset')}
+                                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors duration-200"
+                              >
+                                🗑️ Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -344,6 +428,123 @@ export default function AssetsPage() {
           </div>
         </div>
       </main>
+
+      {/* Edit Asset Modal */}
+      {isEditModalOpen && editingAsset && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 border border-gray-600">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+              <span className="mr-2">✏️</span> Edit Asset
+            </h3>
+            <form onSubmit={handleUpdateAsset}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">📅</span> Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.date}
+                    onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">🏷️</span> Symbol/Ticker
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    placeholder="e.g., AAPL, BTC, GOLD"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">📊</span> Type
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={editForm.type}
+                      onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
+                      className="appearance-none w-full px-4 py-3 pr-10 border-2 border-gray-500 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 hover:border-gray-400 shadow-lg"
+                      required
+                    >
+                      <option value="" className="bg-gray-700 text-white">📂 Select type</option>
+                      <option value="stocks" className="bg-gray-700 text-white">📈 Stocks</option>
+                      <option value="bonds" className="bg-gray-700 text-white">📊 Bonds</option>
+                      <option value="gold" className="bg-gray-700 text-white">🥇 Gold</option>
+                      <option value="real-estate" className="bg-gray-700 text-white">🏠 Real Estate</option>
+                      <option value="crypto" className="bg-gray-700 text-white">₿ Cryptocurrency</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">🔢</span> Quantity
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editForm.quantity}
+                    onChange={(e) => setEditForm({ ...editForm, quantity: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">💰</span> Purchase Price
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editForm.purchasePrice}
+                    onChange={(e) => setEditForm({ ...editForm, purchasePrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <span className="mr-2">📈</span> Current Price
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editForm.currentPrice}
+                    onChange={(e) => setEditForm({ ...editForm, currentPrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+              <div className="flex space-x-3 mt-6">
+                <button
+                  type="submit"
+                  className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center"
+                >
+                  <span className="mr-2">💾</span> Update Asset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   )

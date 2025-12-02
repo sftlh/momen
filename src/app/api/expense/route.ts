@@ -40,6 +40,52 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const decoded = verifyToken(token) as { userId: string } | null
+  if (!decoded) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const data = expenseSchema.parse(body)
+
+    // Verify the expense belongs to the user
+    const existingExpense = await prisma.expense.findFirst({
+      where: {
+        id: id,
+        userId: decoded.userId
+      }
+    })
+
+    if (!existingExpense) {
+      return NextResponse.json({ error: 'Expense not found or access denied' }, { status: 404 })
+    }
+
+    await prisma.expense.update({
+      where: { id: id },
+      data: {
+        ...data,
+        date: new Date(data.date),
+        endDate: data.endDate ? new Date(data.endDate) : null,
+      },
+    })
+
+    return NextResponse.json({ message: 'Expense updated successfully' })
+  } catch (error) {
+    console.error('Update expense error:', error)
+    return NextResponse.json({ error: 'Failed to update expense' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
