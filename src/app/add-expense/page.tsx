@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -16,35 +16,183 @@ const expenseSchema = z.object({
   isRecurring: z.boolean().optional(),
   frequency: z.string().optional(),
   endDate: z.string().optional(),
+  source: z.enum(['income', 'savings']),
+  savingsCategory: z.string().optional(),
 })
 
 type ExpenseForm = z.infer<typeof expenseSchema>
 
+interface Savings {
+  id: string
+  amount: number
+  description: string
+  category: string
+  date: string
+  type: string
+  isEmergency: boolean
+}
+
+interface SavingsAccount {
+  category: string
+  bankName: string
+  balance: number
+  lastUpdated: Date
+  goalAmount?: number
+}
+
+interface SavingsBalance {
+  category: string
+  balance: number
+  isEmergency: boolean
+  description: string
+}
+
 export default function AddExpensePage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [savingsBalances, setSavingsBalances] = useState<SavingsBalance[]>([])
   const router = useRouter()
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<ExpenseForm>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ExpenseForm>({
     resolver: zodResolver(expenseSchema),
+    defaultValues: {
+      source: 'income',
+    },
   })
+
+  const selectedSource = watch('source')
+
+  useEffect(() => {
+    if (selectedSource === 'savings') {
+      fetchSavings()
+    }
+  }, [selectedSource])
+
+  const fetchSavings = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    try {
+      // Use the savings-accounts API which groups by category and bank
+      const res = await fetch('/api/user/savings-accounts', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      const accounts = data.existingAccounts || []
+
+      // Convert to the expected format for the dropdown
+      const availableBalances: SavingsBalance[] = accounts
+        .filter((account: SavingsAccount) => account.balance > 0)
+        .map((account: SavingsAccount) => ({
+          category: `${account.category}|||${account.bankName}`, // Use combined key for uniqueness
+          balance: account.balance,
+          isEmergency: account.category === 'emergency',
+          description: `${account.category} (${account.bankName})`,
+        }))
+
+      setSavingsBalances(availableBalances)
+    } catch (error) {
+      console.error('Failed to fetch savings:', error)
+    }
+  }
 
   const onSubmit = async (data: ExpenseForm) => {
     const token = localStorage.getItem('token')
     if (!token) return router.push('/login')
 
-    const res = await fetch('/api/expense', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    })
-    if (res.ok) {
-      setSuccess('Expense added successfully!')
+    try {
+      if (data.source === 'savings') {
+        if (!data.savingsCategory) {
+          setError('Please select a savings category')
+          return
+        }
+
+        const selectedBalance = savingsBalances.find(balance => balance.category === data.savingsCategory)
+        if (!selectedBalance) {
+          setError('Selected savings category not found')
+          return
+        }
+
+        if (data.amount > selectedBalance.balance) {
+          const [category, bankName] = data.savingsCategory.split('|||')
+          setError(`Expense amount ($${data.amount}) exceeds available savings in ${category} (${bankName}) ($${selectedBalance.balance.toFixed(2)})`)
+          return
+        }
+
+        // Create the expense
+        const expenseRes = await fetch('/api/expense', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            amount: data.amount,
+            description: data.description,
+            category: data.category,
+            date: data.date,
+            isRecurring: data.isRecurring,
+            frequency: data.frequency,
+            endDate: data.endDate,
+          }),
+        })
+
+        if (!expenseRes.ok) {
+          const errorData = await expenseRes.json()
+          setError(errorData.error || 'Failed to create expense')
+          return
+        }
+
+        // Parse category and bankName from savingsCategory
+        const [category, bankName] = data.savingsCategory.split('|||')
+
+        // Create a savings withdrawal record (new record, not updating existing)
+        const savingsRes = await fetch('/api/saving', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            amount: -Math.abs(data.amount), // Negative amount for withdrawal
+            description: `Used for expense: ${data.description || 'Expense'}`,
+            category: category,
+            bankName: bankName,
+            type: 'withdrawal',
+            date: data.date,
+            isEmergency: selectedBalance.isEmergency,
+          }),
+        })
+
+        if (!savingsRes.ok) {
+          const errorData = await savingsRes.json()
+          setError(errorData.error || 'Failed to record savings withdrawal')
+          return
+        }
+
+        setSuccess('Expense created successfully using savings!')
+      } else {
+        // Regular expense from income
+        const res = await fetch('/api/expense', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(data),
+        })
+
+        if (res.ok) {
+          setSuccess('Expense added successfully!')
+        } else {
+          const errorData = await res.json()
+          setError(errorData.error || 'Failed to add expense')
+          return
+        }
+      }
+
       setTimeout(() => router.push('/dashboard'), 2000)
-    } else {
-      setError('Failed to add expense')
+    } catch (error) {
+      setError('An unexpected error occurred')
     }
   }
 
@@ -66,6 +214,37 @@ export default function AddExpensePage() {
               />
               {errors.amount && <p className="text-red-400 text-sm mt-1">{errors.amount.message}</p>}
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Source</label>
+              <select
+                {...register('source')}
+                className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-600 bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300"
+              >
+                <option value="income" className="bg-gray-700">💰 From Income</option>
+                <option value="savings" className="bg-gray-700">💸 From Savings</option>
+              </select>
+              {errors.source && <p className="text-red-400 text-sm mt-1">{errors.source.message}</p>}
+            </div>
+            {selectedSource === 'savings' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Select Savings from Banks</label>
+                <select
+                  {...register('savingsCategory')}
+                  className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-600 bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300"
+                >
+                  <option value="" className="bg-gray-700">Choose savings account to use</option>
+                  {savingsBalances.map((balance) => (
+                    <option key={balance.category} value={balance.category} className="bg-gray-700">
+                      {balance.description} - {Math.round(balance.balance).toLocaleString()} {balance.isEmergency ? '(Emergency)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {savingsBalances.length === 0 && (
+                  <p className="text-yellow-400 text-sm mt-1">No savings available. Add savings first.</p>
+                )}
+                {errors.savingsCategory && <p className="text-red-400 text-sm mt-1">{errors.savingsCategory.message}</p>}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
               <input
@@ -150,7 +329,7 @@ export default function AddExpensePage() {
               type="submit"
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
             >
-              Add Expense
+              {selectedSource === 'savings' ? '💸 Add Expense from Savings' : '💰 Add Expense'}
             </button>
           </form>
           <div className="text-center mt-6">

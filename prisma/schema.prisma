@@ -71,6 +71,7 @@ model Savings {
   description String?
   date        DateTime
   category    String?  // emergency, vacation, car, house, etc.
+  bankName    String?  // Name of the bank where savings are held
   type        String?   @default("deposit") // deposit, withdrawal, transfer
   isRecurring Boolean  @default(false)
   frequency   String?

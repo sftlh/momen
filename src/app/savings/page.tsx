@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
-import TransferFromSavings from '@/components/TransferFromSavings'
 
 interface Savings {
   id: string
@@ -230,6 +229,15 @@ export default function SavingsPage() {
     }
   }
 
+  const totalAmount = filteredSavings.reduce((sum, saving) => sum + saving.amount, 0)
+  const emergencySavings = filteredSavings
+    .filter(saving => saving.isEmergency)
+    .reduce((sum, saving) => sum + saving.amount, 0)
+  const regularSavings = totalAmount - emergencySavings
+  const withdrawals = filteredSavings
+    .filter(saving => saving.type === 'withdrawal')
+    .reduce((sum, saving) => sum + Math.abs(saving.amount), 0)
+
   const refreshSavings = async () => {
     const token = localStorage.getItem('token')
     if (!token) return
@@ -251,15 +259,6 @@ export default function SavingsPage() {
     }
   }
 
-  const totalAmount = filteredSavings.reduce((sum, saving) => sum + saving.amount, 0)
-  const emergencySavings = filteredSavings
-    .filter(saving => saving.isEmergency)
-    .reduce((sum, saving) => sum + saving.amount, 0)
-  const regularSavings = totalAmount - emergencySavings
-  const withdrawals = filteredSavings
-    .filter(saving => saving.type === 'withdrawal')
-    .reduce((sum, saving) => sum + Math.abs(saving.amount), 0)
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white flex flex-col">
       <Navbar />
@@ -268,14 +267,6 @@ export default function SavingsPage() {
           <h1 className="text-4xl font-bold mb-8 bg-gradient-to-r from-blue-400 to-cyan-600 bg-clip-text text-transparent text-center">
             💾 Savings Management
           </h1>
-
-          {/* Transfer from Savings */}
-          <TransferFromSavings
-            onTransfer={() => {
-              refreshSavings()
-            }}
-            availableSavings={totalAmount}
-          />
 
           {/* Filters */}
           <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-600">

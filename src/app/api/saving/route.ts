@@ -8,11 +8,12 @@ const savingSchema = z.object({
   description: z.string().optional(),
   date: z.string(),
   category: z.string().optional(),
+  bankName: z.string().optional(),
   type: z.enum(['deposit', 'withdrawal', 'transfer']).default('deposit'),
   isRecurring: z.boolean().optional(),
   frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']).optional(),
   endDate: z.string().optional(),
-  goalAmount: z.number().optional(),
+  goalAmount: z.union([z.number(), z.string()]).optional(),
   isEmergency: z.boolean().optional(),
 })
 
@@ -27,9 +28,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const data = savingSchema.parse(body)
 
+    // Process goalAmount to ensure it's a number or undefined
+    const processedData = {
+      ...data,
+      goalAmount: typeof data.goalAmount === 'string' && data.goalAmount.trim() === '' 
+        ? undefined 
+        : typeof data.goalAmount === 'number' 
+          ? data.goalAmount 
+          : undefined
+    }
+
     await prisma.savings.create({
       data: {
-        ...data,
+        ...processedData,
         userId: decoded.userId,
         date: new Date(data.date),
         endDate: data.endDate ? new Date(data.endDate) : null,
@@ -60,6 +71,16 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const data = savingSchema.parse(body)
 
+    // Process goalAmount to ensure it's a number or undefined
+    const processedData = {
+      ...data,
+      goalAmount: typeof data.goalAmount === 'string' && data.goalAmount.trim() === '' 
+        ? undefined 
+        : typeof data.goalAmount === 'number' 
+          ? data.goalAmount 
+          : undefined
+    }
+
     // Verify the saving belongs to the user
     const existingSaving = await prisma.savings.findFirst({
       where: {
@@ -75,7 +96,7 @@ export async function PUT(request: NextRequest) {
     await prisma.savings.update({
       where: { id: id },
       data: {
-        ...data,
+        ...processedData,
         date: new Date(data.date),
         endDate: data.endDate ? new Date(data.endDate) : null,
       },

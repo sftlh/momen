@@ -21,7 +21,7 @@
 
 - [x] Fix Set Limit and Summary UI Design
 
-- [x] Implement Delete Functionality for All Financial Records (Income, Expenses, Assets, Savings)
+- [x] Enhance add-savings page with existing account selection for balance top-ups
 
 ## Execution Guidelines
 PROGRESS TRACKING:
