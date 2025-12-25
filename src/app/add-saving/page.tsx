@@ -70,13 +70,27 @@ export default function AddSavingPage() {
 
     const fetchData = async () => {
       const token = localStorage.getItem('token')
-      if (!token) return
+      if (!token) {
+        router.push('/login')
+        return
+      }
 
       try {
         // Fetch total savings for withdrawal validation
         const savingsRes = await fetch('/api/user/savings', {
           headers: { Authorization: `Bearer ${token}` },
         })
+        
+        if (savingsRes.status === 401) {
+          localStorage.removeItem('token')
+          router.push('/login')
+          return
+        }
+        
+        if (!savingsRes.ok) {
+          throw new Error('Failed to fetch savings data')
+        }
+        
         const savingsData = await savingsRes.json()
         const totalSavings = savingsData.savings?.reduce((sum: number, saving: SavingsData) => sum + saving.amount, 0) || 0
         setAvailableSavings(totalSavings)
@@ -85,10 +99,22 @@ export default function AddSavingPage() {
         const accountsRes = await fetch('/api/user/savings-accounts', {
           headers: { Authorization: `Bearer ${token}` },
         })
+        
+        if (accountsRes.status === 401) {
+          localStorage.removeItem('token')
+          router.push('/login')
+          return
+        }
+        
+        if (!accountsRes.ok) {
+          throw new Error('Failed to fetch accounts data')
+        }
+        
         const accountsData = await accountsRes.json()
         setExistingAccounts(accountsData.existingAccounts || [])
       } catch (error) {
         console.error('Failed to fetch data:', error)
+        setError('Failed to load data. Please try again.')
       }
     }
 

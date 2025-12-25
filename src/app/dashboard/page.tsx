@@ -1,9 +1,11 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import { apiRequest } from '@/lib/api'
 
 interface Income {
   id: string
@@ -85,12 +87,13 @@ export default function DashboardPage() {
       return
     }
 
-    fetch('/api/user/finances', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiRequest('/api/user/finances', {}, router)
       .then(res => res.json())
       .then(setData)
-      .catch(() => router.push('/login'))
+      .catch((error) => {
+        console.error('Error fetching finances:', error)
+        // Error is already handled by apiRequest
+      })
   }, [router, isClient])
 
   if (!isClient || !data) return (

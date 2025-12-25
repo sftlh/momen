@@ -74,13 +74,27 @@ export default function AddExpensePage() {
 
   const fetchSavings = async () => {
     const token = localStorage.getItem('token')
-    if (!token) return
+    if (!token) {
+      router.push('/login')
+      return
+    }
 
     try {
       // Use the savings-accounts API which groups by category and bank
       const res = await fetch('/api/user/savings-accounts', {
         headers: { Authorization: `Bearer ${token}` },
       })
+      
+      if (res.status === 401) {
+        localStorage.removeItem('token')
+        router.push('/login')
+        return
+      }
+      
+      if (!res.ok) {
+        throw new Error('Failed to fetch savings accounts')
+      }
+      
       const data = await res.json()
       const accounts = data.existingAccounts || []
 
@@ -97,6 +111,7 @@ export default function AddExpensePage() {
       setSavingsBalances(availableBalances)
     } catch (error) {
       console.error('Failed to fetch savings:', error)
+      setError('Failed to load savings data. Please try again.')
     }
   }
 
