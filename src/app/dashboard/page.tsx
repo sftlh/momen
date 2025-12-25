@@ -64,6 +64,7 @@ interface FinanceData {
 
 export default function DashboardPage() {
   const [data, setData] = useState<FinanceData | null>(null)
+  const [isClient, setIsClient] = useState(false)
   const router = useRouter()
 
   // Helper function to format numbers with commas and no decimals
@@ -72,6 +73,12 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isClient) return
+
     const token = localStorage.getItem('token')
     if (!token) {
       router.push('/login')
@@ -84,9 +91,13 @@ export default function DashboardPage() {
       .then(res => res.json())
       .then(setData)
       .catch(() => router.push('/login'))
-  }, [router])
+  }, [router, isClient])
 
-  if (!data) return <div>Loading...</div>
+  if (!isClient || !data) return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center">
+      <div className="text-white text-xl">Loading...</div>
+    </div>
+  )
 
   const { totals, spendingLimit, expenses } = data
   const isNearLimit = spendingLimit && totals.totalExpenses > spendingLimit.limitAmount * 0.8

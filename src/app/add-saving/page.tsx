@@ -48,6 +48,7 @@ export default function AddSavingPage() {
   const [success, setSuccess] = useState('')
   const [availableSavings, setAvailableSavings] = useState(0)
   const [existingAccounts, setExistingAccounts] = useState<ExistingAccount[]>([])
+  const [isClient, setIsClient] = useState(false)
   const router = useRouter()
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<z.infer<typeof savingSchema>>({
     resolver: zodResolver(savingSchema),
@@ -59,8 +60,14 @@ export default function AddSavingPage() {
     },
   })
 
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
   // Fetch available savings and existing accounts when component mounts
   useEffect(() => {
+    if (!isClient) return
+
     const fetchData = async () => {
       const token = localStorage.getItem('token')
       if (!token) return
@@ -86,7 +93,7 @@ export default function AddSavingPage() {
     }
 
     fetchData()
-  }, [])
+  }, [isClient])
 
   // Handle transaction type changes
   useEffect(() => {
@@ -97,6 +104,8 @@ export default function AddSavingPage() {
   }, [watch('type'), setValue])
 
   const onSubmit = async (data: z.infer<typeof savingSchema>) => {
+    if (!isClient) return
+
     const token = localStorage.getItem('token')
     if (!token) return router.push('/login')
 

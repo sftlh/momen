@@ -51,6 +51,7 @@ export default function AddExpensePage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [savingsBalances, setSavingsBalances] = useState<SavingsBalance[]>([])
+  const [isClient, setIsClient] = useState(false)
   const router = useRouter()
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ExpenseForm>({
     resolver: zodResolver(expenseSchema),
@@ -62,10 +63,14 @@ export default function AddExpensePage() {
   const selectedSource = watch('source')
 
   useEffect(() => {
-    if (selectedSource === 'savings') {
+    setIsClient(true)
+  }, [])
+
+  useEffect(() => {
+    if (selectedSource === 'savings' && isClient) {
       fetchSavings()
     }
-  }, [selectedSource])
+  }, [selectedSource, isClient])
 
   const fetchSavings = async () => {
     const token = localStorage.getItem('token')
@@ -96,6 +101,8 @@ export default function AddExpensePage() {
   }
 
   const onSubmit = async (data: ExpenseForm) => {
+    if (!isClient) return
+
     const token = localStorage.getItem('token')
     if (!token) return router.push('/login')
 

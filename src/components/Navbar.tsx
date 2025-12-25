@@ -1,12 +1,19 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function Navbar() {
   const router = useRouter()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   const handleLogout = () => {
+    if (!isClient) return
     localStorage.removeItem('token')
     router.push('/login')
     setIsMobileMenuOpen(false)
