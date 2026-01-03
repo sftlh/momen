@@ -55,12 +55,20 @@ interface FinanceData {
   savings: Savings[]
   assets: Asset[]
   spendingLimit: SpendingLimit | null
+  currentMonth: {
+    name: string
+    year: number
+    income: number
+    expenses: number
+    savings: number
+  }
   totals: {
     totalIncome: number
     totalExpenses: number
     totalSavings: number
     totalAssets: number
     remaining: number
+    netWorth: number
   }
 }
 
@@ -102,7 +110,7 @@ export default function DashboardPage() {
     </div>
   )
 
-  const { totals, spendingLimit, expenses } = data
+  const { totals, spendingLimit, expenses, currentMonth } = data
   const isNearLimit = spendingLimit && totals.totalExpenses > spendingLimit.limitAmount * 0.8
 
   return (
@@ -115,6 +123,9 @@ export default function DashboardPage() {
               Welcome to MoMen
             </h1>
             <p className="text-gray-400 text-lg">Your Family Finance Dashboard</p>
+            <div className="mt-4 inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg border border-blue-500/30">
+              <span className="text-blue-300 font-medium">📅 Current Month: {currentMonth.name} {currentMonth.year}</span>
+            </div>
           </div>
 
           {/* Financial Overview Cards */}
@@ -124,35 +135,35 @@ export default function DashboardPage() {
                 <div className="text-3xl">💰</div>
                 <div className="text-green-200 text-sm font-medium">Income</div>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-1">{formatNumber(totals.totalIncome)}</h2>
-              <p className="text-green-200 text-sm">Total Earnings</p>
+              <h2 className="text-2xl font-bold text-white mb-1">{formatNumber(currentMonth.income)}</h2>
+              <p className="text-green-200 text-sm">This Month</p>
             </div>
 
             <div className="bg-gradient-to-br from-red-500 to-red-600 p-6 rounded-xl shadow-2xl border border-red-400/20 hover:scale-105 transition-all duration-300 group">
               <div className="flex items-center justify-between mb-4">
                 <div className="text-3xl">💸</div>
-                <div className="text-red-200 text-sm font-medium">Expenses</div>
+                <div className="text-red-200 text-sm font-medium">Total Spent</div>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-1">{formatNumber(totals.totalExpenses)}</h2>
-              <p className="text-red-200 text-sm">Total Spent</p>
+              <h2 className="text-2xl font-bold text-white mb-1">{formatNumber(currentMonth.expenses)}</h2>
+              <p className="text-red-200 text-sm">This Month</p>
             </div>
 
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl shadow-2xl border border-blue-400/20 hover:scale-105 transition-all duration-300 group">
               <div className="flex items-center justify-between mb-4">
                 <div className="text-3xl">🏦</div>
-                <div className="text-blue-200 text-sm font-medium">Savings</div>
+                <div className="text-blue-200 text-sm font-medium">Saved Amount</div>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-1">{formatNumber(totals.totalSavings)}</h2>
-              <p className="text-blue-200 text-sm">Saved Amount</p>
+              <h2 className="text-2xl font-bold text-white mb-1">{formatNumber(currentMonth.savings)}</h2>
+              <p className="text-blue-200 text-sm">This Month</p>
             </div>
 
             <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-xl shadow-2xl border border-purple-400/20 hover:scale-105 transition-all duration-300 group">
               <div className="flex items-center justify-between mb-4">
                 <div className="text-3xl">🏠</div>
-                <div className="text-purple-200 text-sm font-medium">Assets</div>
+                <div className="text-purple-200 text-sm font-medium">Total Value</div>
               </div>
               <h2 className="text-2xl font-bold text-white mb-1">{formatNumber(totals.totalAssets)}</h2>
-              <p className="text-purple-200 text-sm">Total Value</p>
+              <p className="text-purple-200 text-sm">All Assets</p>
             </div>
           </div>
 
@@ -161,17 +172,70 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-3xl font-bold text-white mb-2">Net Worth</h2>
-                <p className={`text-4xl font-bold ${totals.remaining < 0 ? 'text-red-300' : 'text-green-300'}`}>
-                  {formatNumber(totals.remaining)}
+                <p className="text-indigo-200 text-sm mb-1">Current Month ({currentMonth.name} {currentMonth.year})</p>
+                <p className={`text-4xl font-bold ${totals.netWorth < 0 ? 'text-red-300' : 'text-green-300'}`}>
+                  {formatNumber(totals.netWorth)}
                 </p>
                 <p className="text-indigo-200 mt-2">
-                  {totals.remaining >= 0 ? '🎉 You\'re in the green!' : '⚠️ Consider reviewing expenses'}
+                  {totals.netWorth >= 0 ? '🎉 You\'re building wealth!' : '⚠️ Focus on savings and investments'}
                 </p>
               </div>
               <div className="text-6xl">
-                {totals.remaining >= 0 ? '📈' : '📉'}
+                {totals.netWorth >= 0 ? '📈' : '📉'}
               </div>
             </div>
+          </div>
+
+          {/* Asset Status */}
+          <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl shadow-xl border border-gray-700 mb-8">
+            <h2 className="text-2xl font-bold text-white mb-4 flex items-center">
+              <span className="mr-2">🏠</span> Asset Status
+            </h2>
+            {data.assets.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {data.assets.map((asset) => {
+                  const gainLoss = asset.currentPrice ? asset.currentPrice - asset.purchasePrice : 0
+                  const gainLossPercent = asset.currentPrice ? ((gainLoss / asset.purchasePrice) * 100) : 0
+                  
+                  return (
+                    <div key={asset.id} className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-lg font-semibold text-white">{asset.symbol || asset.type}</h3>
+                        <span className="text-2xl">
+                          {asset.type === 'stocks' ? '📈' : 
+                           asset.type === 'crypto' ? '₿' : 
+                           asset.type === 'gold' ? '🥇' : 
+                           asset.type === 'real-estate' ? '🏠' : '💎'}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-gray-300 text-sm">{asset.description}</p>
+                        <p className="text-white font-bold">{formatNumber(asset.totalValue)}</p>
+                        <p className="text-gray-400 text-xs">
+                          {asset.quantity} {asset.quantity === 1 ? 'unit' : 'units'} @ {formatNumber(asset.purchasePrice)}
+                        </p>
+                        {asset.currentPrice && (
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs font-medium ${gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {gainLoss >= 0 ? '+' : ''}{formatNumber(gainLoss)} ({gainLossPercent >= 0 ? '+' : ''}{gainLossPercent.toFixed(1)}%)
+                            </span>
+                            <span className="text-gray-400 text-xs">
+                              Current: {formatNumber(asset.currentPrice)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">🏠</div>
+                <p className="text-gray-400 mb-2">No assets recorded yet</p>
+                <p className="text-gray-500 text-sm">Start building your portfolio by adding your first asset</p>
+              </div>
+            )}
           </div>
 
           {/* Spending Limit Progress */}
