@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import * as XLSX from 'xlsx'
 
 interface Income {
   id: string
@@ -94,6 +95,46 @@ export default function IncomePage() {
   }, [incomes, selectedCategory])
 
   const totalAmount = filteredIncomes.reduce((sum, income) => sum + income.amount, 0)
+
+  // Export incomes to Excel
+  const exportToExcel = () => {
+    if (filteredIncomes.length === 0) {
+      alert('No incomes to export')
+      return
+    }
+
+    // Prepare data for Excel
+    const data = filteredIncomes.map(income => ({
+      Date: formatDate(income.date),
+      Description: income.description,
+      Category: income.category,
+      Amount: income.amount,
+      Recurring: income.recurring ? 'Yes' : 'No'
+    }))
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(data)
+
+    // Auto-size columns
+    const colWidths = [
+      { wch: 12 }, // Date
+      { wch: 40 }, // Description
+      { wch: 15 }, // Category
+      { wch: 12 }, // Amount
+      { wch: 10 }  // Recurring
+    ]
+    ws['!cols'] = colWidths
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Income')
+
+    // Generate filename
+    const filename = `income_${selectedYear}${selectedMonth ? `_${selectedMonth}` : ''}_${new Date().toISOString().split('T')[0]}.xlsx`
+
+    // Save file
+    XLSX.writeFile(wb, filename)
+  }
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -302,9 +343,19 @@ export default function IncomePage() {
 
           {/* Summary */}
           <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-600">
-            <div className="text-center">
-              <p className="text-green-400 text-2xl font-bold">{formatNumber(totalAmount)}</p>
-              <p className="text-gray-400 text-sm">Total Income ({filteredIncomes.length} transactions)</p>
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-green-400 text-2xl font-bold">{formatNumber(totalAmount)}</p>
+                <p className="text-gray-400 text-sm">Total Income ({filteredIncomes.length} transactions)</p>
+              </div>
+              <button
+                onClick={exportToExcel}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                title="Export income to Excel file"
+              >
+                <span>📊</span>
+                <span>Export Excel</span>
+              </button>
             </div>
           </div>
 

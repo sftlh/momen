@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import * as XLSX from 'xlsx'
 
 interface Savings {
   id: string
@@ -259,6 +260,52 @@ export default function SavingsPage() {
     }
   }
 
+  // Export savings to Excel
+  const exportToExcel = () => {
+    if (filteredSavings.length === 0) {
+      alert('No savings to export')
+      return
+    }
+
+    // Prepare data for Excel
+    const data = filteredSavings.map(saving => ({
+      Date: formatDate(saving.date),
+      Description: saving.description,
+      Category: saving.category,
+      Amount: saving.amount,
+      Type: saving.type,
+      Recurring: saving.recurring ? 'Yes' : 'No',
+      Emergency: saving.isEmergency ? 'Yes' : 'No',
+      Goal: saving.goalAmount || 'N/A'
+    }))
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(data)
+
+    // Auto-size columns
+    const colWidths = [
+      { wch: 12 }, // Date
+      { wch: 40 }, // Description
+      { wch: 15 }, // Category
+      { wch: 12 }, // Amount
+      { wch: 12 }, // Type
+      { wch: 10 }, // Recurring
+      { wch: 10 }, // Emergency
+      { wch: 12 }  // Goal
+    ]
+    ws['!cols'] = colWidths
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Savings')
+
+    // Generate filename
+    const filename = `savings_${selectedYear}${selectedMonth ? `_${selectedMonth}` : ''}_${new Date().toISOString().split('T')[0]}.xlsx`
+
+    // Save file
+    XLSX.writeFile(wb, filename)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white flex flex-col">
       <Navbar />
@@ -350,9 +397,21 @@ export default function SavingsPage() {
 
           {/* Enhanced Summary */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <div className="bg-gray-800 rounded-lg p-6 border border-gray-600 text-center">
-              <p className="text-green-400 text-2xl font-bold">{formatNumber(totalAmount)}</p>
-              <p className="text-gray-400 text-sm">Total Savings</p>
+            <div className="bg-gray-800 rounded-lg p-6 border border-gray-600">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-green-400 text-2xl font-bold">{formatNumber(totalAmount)}</p>
+                  <p className="text-gray-400 text-sm">Total Savings</p>
+                </div>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200 flex items-center space-x-1 text-sm"
+                  title="Export savings to Excel file"
+                >
+                  <span>📊</span>
+                  <span>Export</span>
+                </button>
+              </div>
             </div>
             <div className="bg-gray-800 rounded-lg p-6 border border-gray-600 text-center">
               <p className="text-blue-400 text-2xl font-bold">{formatNumber(emergencySavings)}</p>

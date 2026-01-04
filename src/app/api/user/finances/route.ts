@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
   const currentMonthExpense = currentMonthExpenses.reduce((sum, e) => sum + e.amount, 0)
   const currentMonthSaved = currentMonthSavings.reduce((sum, s) => sum + s.amount, 0)
 
-  // Calculate Net Worth (Current month income - expenses + savings + all assets)
-  const currentMonthNetWorth = currentMonthIncome - currentMonthExpense + currentMonthSaved + totalAssets
+  // Calculate Net Worth (Current month income - expenses)
+  const currentMonthNetWorth = currentMonthIncome - currentMonthExpense
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',

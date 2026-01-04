@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import * as XLSX from 'xlsx'
 
 interface Asset {
   id: string
@@ -232,6 +233,52 @@ export default function AssetsPage() {
   const totalPurchaseValue = filteredAssets.reduce((sum, asset) => sum + (asset.purchasePrice * asset.quantity), 0)
   const totalGainLoss = totalValue - totalPurchaseValue
 
+  // Export assets to Excel
+  const exportToExcel = () => {
+    if (filteredAssets.length === 0) {
+      alert('No assets to export')
+      return
+    }
+
+    // Prepare data for Excel
+    const data = filteredAssets.map(asset => ({
+      Date: formatDate(asset.date),
+      Symbol: asset.symbol || 'N/A',
+      Type: asset.type,
+      Quantity: asset.quantity,
+      'Purchase Price': asset.purchasePrice,
+      'Current Price': asset.currentPrice,
+      'Total Value': asset.totalValue,
+      'Gain/Loss': asset.totalValue - (asset.purchasePrice * asset.quantity)
+    }))
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(data)
+
+    // Auto-size columns
+    const colWidths = [
+      { wch: 12 }, // Date
+      { wch: 10 }, // Symbol
+      { wch: 15 }, // Type
+      { wch: 10 }, // Quantity
+      { wch: 15 }, // Purchase Price
+      { wch: 15 }, // Current Price
+      { wch: 15 }, // Total Value
+      { wch: 12 }  // Gain/Loss
+    ]
+    ws['!cols'] = colWidths
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Assets')
+
+    // Generate filename
+    const filename = `assets_${selectedYear}${selectedMonth ? `_${selectedMonth}` : ''}_${new Date().toISOString().split('T')[0]}.xlsx`
+
+    // Save file
+    XLSX.writeFile(wb, filename)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white flex flex-col">
       <Navbar />
@@ -310,9 +357,19 @@ export default function AssetsPage() {
           {/* Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div className="bg-gray-800 rounded-lg p-6 border border-gray-600">
-              <div className="text-center">
-                <p className="text-purple-400 text-xl font-bold">{formatNumber(totalValue)}</p>
-                <p className="text-gray-400 text-sm">Total Current Value</p>
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-purple-400 text-xl font-bold">{formatNumber(totalValue)}</p>
+                  <p className="text-gray-400 text-sm">Total Current Value</p>
+                </div>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200 flex items-center space-x-1 text-sm"
+                  title="Export assets to Excel file"
+                >
+                  <span>📊</span>
+                  <span>Export</span>
+                </button>
               </div>
             </div>
             <div className="bg-gray-800 rounded-lg p-6 border border-gray-600">

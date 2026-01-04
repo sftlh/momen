@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import * as XLSX from 'xlsx'
 
 interface Expense {
   id: string
@@ -240,6 +241,46 @@ export default function ExpensesPage() {
 
   const totalAmount = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)
 
+  // Export expenses to Excel
+  const exportToExcel = () => {
+    if (filteredExpenses.length === 0) {
+      alert('No expenses to export')
+      return
+    }
+
+    // Prepare data for Excel
+    const data = filteredExpenses.map(expense => ({
+      Date: formatDate(expense.date),
+      Description: expense.description,
+      Category: expense.category,
+      Amount: expense.amount,
+      Recurring: expense.recurring ? 'Yes' : 'No'
+    }))
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(data)
+
+    // Auto-size columns
+    const colWidths = [
+      { wch: 12 }, // Date
+      { wch: 40 }, // Description
+      { wch: 15 }, // Category
+      { wch: 12 }, // Amount
+      { wch: 10 }  // Recurring
+    ]
+    ws['!cols'] = colWidths
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Expenses')
+
+    // Generate filename
+    const filename = `expenses_${selectedYear}${selectedMonth ? `_${selectedMonth}` : ''}_${new Date().toISOString().split('T')[0]}.xlsx`
+
+    // Save file
+    XLSX.writeFile(wb, filename)
+  }
+
   // Calculate expenses by category
   const expensesByCategory = useMemo(() => {
     const categoryTotals: { [key: string]: number } = {}
@@ -328,9 +369,19 @@ export default function ExpensesPage() {
 
           {/* Summary */}
           <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-600">
-            <div className="text-center">
-              <p className="text-red-400 text-2xl font-bold">{formatNumber(totalAmount)}</p>
-              <p className="text-gray-400 text-sm">Total Expenses ({filteredExpenses.length} transactions)</p>
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-red-400 text-2xl font-bold">{formatNumber(totalAmount)}</p>
+                <p className="text-gray-400 text-sm">Total Expenses ({filteredExpenses.length} transactions)</p>
+              </div>
+              <button
+                onClick={exportToExcel}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                title="Export expenses to Excel file"
+              >
+                <span>📊</span>
+                <span>Export Excel</span>
+              </button>
             </div>
           </div>
 
